@@ -1,16 +1,20 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using JobApplicationTracker.Data;
 using JobApplicationTracker.Models;
-using Microsoft.EntityFrameworkCore;
-using System.Windows.Input;
+using Microsoft.Win32;
+using System.IO;
+using System.Text;
+using JobApplicationTracker.Services;
 
 namespace JobApplicationTracker
 {
     public partial class MainWindow : Window
     {
         private readonly ObservableCollection<JobApplication> _applications = new();
+        private readonly JobApplicationService _jobApplicationService = new();
 
         private JobApplication? _selectedApplication;
 
@@ -19,31 +23,62 @@ namespace JobApplicationTracker
             InitializeComponent();
 
             ApplicationsDataGrid.ItemsSource = _applications;
+            ApplicationDatePicker.SelectedDate = DateTime.Today;
 
             InitializeDatabase();
-            LoadApplications();
+            ApplyFilters();
         }
 
         private void InitializeDatabase()
         {
             using var db = new ApplicationDbContext();
-            db.Database.EnsureCreated();
+
+            try
+            {
+                db.Database.EnsureCreated();
+
+                // Testet, ob die Tabelle wirklich existiert.
+                db.JobApplications.Any();
+            }
+            catch
+            {
+                // Falls die Datenbankdatei existiert, aber kaputt/unvollständig ist:
+                db.Database.EnsureDeleted();
+                db.Database.EnsureCreated();
+            }
         }
 
-        private void LoadApplications()
+        private void ApplyFilters()
         {
+            if (SearchTextBox is null || StatusFilterComboBox is null)
+            {
+                return;
+            }
+
+            string searchText = SearchTextBox.Text.Trim();
+            string selectedStatus = GetSelectedFilterStatus();
+
+            var filteredApplications = _jobApplicationService.GetApplications(searchText, selectedStatus);
+
             _applications.Clear();
 
-            using var db = new ApplicationDbContext();
-
-            var applicationsFromDatabase = db.JobApplications
-                .OrderByDescending(application => application.ApplicationDate)
-                .ToList();
-
-            foreach (var application in applicationsFromDatabase)
+            foreach (var application in filteredApplications)
             {
                 _applications.Add(application);
             }
+
+            UpdateDashboard();
+        }
+
+        private string GetSelectedFilterStatus()
+        {
+            if (StatusFilterComboBox.SelectedItem is ComboBoxItem selectedItem &&
+                selectedItem.Content is string status)
+            {
+                return status;
+            }
+
+            return "Alle";
         }
 
         private void AddApplicationButton_Click(object sender, RoutedEventArgs e)
@@ -53,13 +88,19 @@ namespace JobApplicationTracker
 
             if (string.IsNullOrWhiteSpace(companyName) || string.IsNullOrWhiteSpace(positionTitle))
             {
-                MessageBox.Show("Bitte Unternehmen und Position angeben.", "Fehlende Informationen", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(
+                    "Bitte Unternehmen und Position angeben.",
+                    "Fehlende Informationen",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
                 return;
             }
 
             string selectedStatus = "Beworben";
 
-            if (StatusComboBox.SelectedItem is ComboBoxItem selectedItem && selectedItem.Content is string status)
+            if (StatusComboBox.SelectedItem is ComboBoxItem selectedItem &&
+                selectedItem.Content is string status)
             {
                 selectedStatus = status;
             }
@@ -75,18 +116,18 @@ namespace JobApplicationTracker
                 Notes = NotesTextBox.Text.Trim()
             };
 
-            using var db = new ApplicationDbContext();
-            db.JobApplications.Add(application);
-            db.SaveChanges();
+            _jobApplicationService.AddApplication(application);
 
-            _applications.Add(application);
-
-            ClearForm();
-            _selectedApplication = null;
-            ApplicationsDataGrid.SelectedItem = null;
+            ApplyFilters();
+            ResetFormSelection();
         }
 
         private void DeleteApplicationButton_Click(object sender, RoutedEventArgs e)
+        {
+            DeleteSelectedApplication();
+        }
+
+        private void DeleteSelectedApplication()
         {
             if (ApplicationsDataGrid.SelectedItem is not JobApplication selectedApplication)
             {
@@ -110,52 +151,22 @@ namespace JobApplicationTracker
                 return;
             }
 
-            using var db = new ApplicationDbContext();
+            try
+            {
+                _jobApplicationService.DeleteApplication(selectedApplication.Id);
 
-            var applicationFromDatabase = db.JobApplications
-                .FirstOrDefault(application => application.Id == selectedApplication.Id);
-
-            if (applicationFromDatabase is null)
+                ApplyFilters();
+                ResetFormSelection();
+            }
+            catch (InvalidOperationException exception)
             {
                 MessageBox.Show(
-                    "Die Bewerbung wurde in der Datenbank nicht gefunden.",
+                    exception.Message,
                     "Fehler",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
-
-                return;
             }
-
-            db.JobApplications.Remove(applicationFromDatabase);
-            db.SaveChanges();
-
-            _applications.Remove(selectedApplication);
-        }
-
-        private void ApplicationsDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (ApplicationsDataGrid.SelectedItem is not JobApplication selectedApplication)
-            {
-                return;
-            }
-
-            _selectedApplication = selectedApplication;
-
-            CompanyTextBox.Text = selectedApplication.CompanyName;
-            PositionTextBox.Text = selectedApplication.PositionTitle;
-            ContactPersonTextBox.Text = selectedApplication.ContactPerson;
-            ContactEmailTextBox.Text = selectedApplication.ContactEmail;
-            ApplicationDatePicker.SelectedDate = selectedApplication.ApplicationDate;
-            NotesTextBox.Text = selectedApplication.Notes;
-
-            foreach (ComboBoxItem item in StatusComboBox.Items)
-            {
-                if (item.Content is string status && status == selectedApplication.Status)
-                {
-                    StatusComboBox.SelectedItem = item;
-                    break;
-                }
-            }
+            ResetFormSelection();
         }
 
         private void UpdateApplicationButton_Click(object sender, RoutedEventArgs e)
@@ -187,58 +198,75 @@ namespace JobApplicationTracker
 
             string selectedStatus = "Beworben";
 
-            if (StatusComboBox.SelectedItem is ComboBoxItem selectedItem && selectedItem.Content is string status)
+            if (StatusComboBox.SelectedItem is ComboBoxItem selectedItem &&
+                selectedItem.Content is string status)
             {
                 selectedStatus = status;
             }
 
-            using var db = new ApplicationDbContext();
+            var updatedApplication = new JobApplication
+            {
+                Id = _selectedApplication.Id,
+                CompanyName = companyName,
+                PositionTitle = positionTitle,
+                ContactPerson = ContactPersonTextBox.Text.Trim(),
+                ContactEmail = ContactEmailTextBox.Text.Trim(),
+                ApplicationDate = ApplicationDatePicker.SelectedDate ?? DateTime.Today,
+                Status = selectedStatus,
+                Notes = NotesTextBox.Text.Trim()
+            };
 
-            var applicationFromDatabase = db.JobApplications
-                .FirstOrDefault(application => application.Id == _selectedApplication.Id);
+            try
+            {
+                _jobApplicationService.UpdateApplication(updatedApplication);
 
-            if (applicationFromDatabase is null)
+                ApplyFilters();
+                ResetFormSelection();
+            }
+            catch (InvalidOperationException exception)
             {
                 MessageBox.Show(
-                    "Die Bewerbung wurde in der Datenbank nicht gefunden.",
+                    exception.Message,
                     "Fehler",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+            }
+        }
 
+        private void ApplicationsDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ApplicationsDataGrid.SelectedItem is not JobApplication selectedApplication)
+            {
                 return;
             }
 
-            applicationFromDatabase.CompanyName = companyName;
-            applicationFromDatabase.PositionTitle = positionTitle;
-            applicationFromDatabase.ContactPerson = ContactPersonTextBox.Text.Trim();
-            applicationFromDatabase.ContactEmail = ContactEmailTextBox.Text.Trim();
-            applicationFromDatabase.ApplicationDate = ApplicationDatePicker.SelectedDate ?? DateTime.Today;
-            applicationFromDatabase.Status = selectedStatus;
-            applicationFromDatabase.Notes = NotesTextBox.Text.Trim();
+            _selectedApplication = selectedApplication;
 
-            db.SaveChanges();
+            CompanyTextBox.Text = selectedApplication.CompanyName;
+            PositionTextBox.Text = selectedApplication.PositionTitle;
+            ContactPersonTextBox.Text = selectedApplication.ContactPerson;
+            ContactEmailTextBox.Text = selectedApplication.ContactEmail;
+            ApplicationDatePicker.SelectedDate = selectedApplication.ApplicationDate;
+            NotesTextBox.Text = selectedApplication.Notes;
 
-            _selectedApplication.CompanyName = applicationFromDatabase.CompanyName;
-            _selectedApplication.PositionTitle = applicationFromDatabase.PositionTitle;
-            _selectedApplication.ContactPerson = applicationFromDatabase.ContactPerson;
-            _selectedApplication.ContactEmail = applicationFromDatabase.ContactEmail;
-            _selectedApplication.ApplicationDate = applicationFromDatabase.ApplicationDate;
-            _selectedApplication.Status = applicationFromDatabase.Status;
-            _selectedApplication.Notes = applicationFromDatabase.Notes;
-
-            ApplicationsDataGrid.Items.Refresh();
-
-            ClearForm();
-            _selectedApplication = null;
-            ApplicationsDataGrid.SelectedItem = null;
+            foreach (ComboBoxItem item in StatusComboBox.Items)
+            {
+                if (item.Content is string status && status == selectedApplication.Status)
+                {
+                    StatusComboBox.SelectedItem = item;
+                    break;
+                }
+            }
         }
 
-
-        private void ResetFormSelection()
+        private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            ClearForm();
-            _selectedApplication = null;
-            ApplicationsDataGrid.SelectedItem = null;
+            ApplyFilters();
+        }
+
+        private void StatusFilterComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ApplyFilters();
         }
 
         private void ClearFormButton_Click(object sender, RoutedEventArgs e)
@@ -246,12 +274,124 @@ namespace JobApplicationTracker
             ResetFormSelection();
         }
 
-        private void Window_KeyDown(object sender, KeyEventArgs e)
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Escape)
             {
                 ResetFormSelection();
+                e.Handled = true;
+                return;
             }
+
+            if (e.Key == Key.Delete)
+            {
+                if (Keyboard.FocusedElement is TextBox)
+                {
+                    return;
+                }
+
+                if (ApplicationsDataGrid.SelectedItem is JobApplication)
+                {
+                    DeleteSelectedApplication();
+                    e.Handled = true;
+                }
+            }
+        }
+
+        private void ExportCsvButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_applications.Count == 0)
+            {
+                MessageBox.Show(
+                    "Es sind keine Bewerbungen zum Exportieren vorhanden.",
+                    "Export nicht möglich",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            var saveFileDialog = new SaveFileDialog
+            {
+                Title = "Bewerbungen als CSV exportieren",
+                Filter = "CSV-Datei (*.csv)|*.csv",
+                FileName = $"Bewerbungen_{DateTime.Now:yyyy-MM-dd}.csv"
+            };
+
+            bool? result = saveFileDialog.ShowDialog();
+
+            if (result != true)
+            {
+                return;
+            }
+
+            var csvBuilder = new StringBuilder();
+
+            csvBuilder.AppendLine("Unternehmen;Position;Kontaktperson;E-Mail;Bewerbungsdatum;Status;Notizen");
+
+            foreach (var application in _applications)
+            {
+                csvBuilder.AppendLine(
+                    $"{EscapeCsvValue(application.CompanyName)};" +
+                    $"{EscapeCsvValue(application.PositionTitle)};" +
+                    $"{EscapeCsvValue(application.ContactPerson)};" +
+                    $"{EscapeCsvValue(application.ContactEmail)};" +
+                    $"{application.ApplicationDate:dd.MM.yyyy};" +
+                    $"{EscapeCsvValue(application.Status)};" +
+                    $"{EscapeCsvValue(application.Notes)}");
+            }
+
+            File.WriteAllText(saveFileDialog.FileName, csvBuilder.ToString(), Encoding.UTF8);
+
+            MessageBox.Show(
+                "Die Bewerbungen wurden erfolgreich exportiert.",
+                "Export abgeschlossen",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
+        private static string EscapeCsvValue(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            string escapedValue = value.Replace("\"", "\"\"");
+
+            if (escapedValue.Contains(';') ||
+                escapedValue.Contains('"') ||
+                escapedValue.Contains('\n') ||
+                escapedValue.Contains('\r'))
+            {
+                escapedValue = $"\"{escapedValue}\"";
+            }
+
+            return escapedValue;
+        }
+
+        private void UpdateDashboard()
+        {
+            var allApplications = _jobApplicationService.GetAllApplications();
+
+            int totalCount = allApplications.Count;
+            int appliedCount = allApplications.Count(application => application.Status == "Beworben");
+            int confirmedCount = allApplications.Count(application => application.Status == "Erhalt bestätigt");
+            int rejectedCount = allApplications.Count(application => application.Status == "Abgelehnt");
+            int acceptedCount = allApplications.Count(application => application.Status == "Akzeptiert");
+
+            TotalCountTextBlock.Text = $"Gesamt: {totalCount}";
+            AppliedCountTextBlock.Text = $"Beworben: {appliedCount}";
+            ConfirmedCountTextBlock.Text = $"Erhalt bestätigt: {confirmedCount}";
+            RejectedCountTextBlock.Text = $"Abgelehnt: {rejectedCount}";
+            AcceptedCountTextBlock.Text = $"Akzeptiert: {acceptedCount}";
+        }
+
+        private void ResetFormSelection()
+        {
+            ClearForm();
+            _selectedApplication = null;
+            ApplicationsDataGrid.SelectedItem = null;
         }
 
         private void ClearForm()
