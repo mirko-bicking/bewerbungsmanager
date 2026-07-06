@@ -2,8 +2,12 @@
 
 Eine kleine Desktop-App zur Verwaltung von Jobbewerbungen.
 
-Die Anwendung ermöglicht es Benutzern, Bewerbungen hinzuzufügen, lokal zu speichern, zu bearbeiten, zu löschen, zu suchen und nach Status zu filtern.  
+Die Anwendung ermöglicht es, Bewerbungen hinzuzufügen, lokal zu speichern, zu bearbeiten, zu löschen, zu durchsuchen, nach Status zu filtern und als CSV-Datei zu exportieren.  
 Sie wurde als Portfolio-Projekt entwickelt, um C#, WPF, SQLite und Entity Framework Core praktisch anzuwenden.
+
+## Screenshot
+
+![Screenshot der Anwendung](docs/screenshots/main-window.png)
 
 ## Features
 
@@ -15,6 +19,8 @@ Sie wurde als Portfolio-Projekt entwickelt, um C#, WPF, SQLite und Entity Framew
 - Ausgewählte Bewerbungen löschen
 - Bewerbungen per Suchfeld durchsuchen
 - Bewerbungen nach Status filtern
+- Dashboard mit Anzahl der Bewerbungen pro Status anzeigen
+- Aktuell angezeigte Bewerbungen als CSV exportieren
 - Status farblich im DataGrid darstellen
 - Status-Legende anzeigen
 - Formular per Button oder Escape-Taste zurücksetzen
@@ -23,8 +29,6 @@ Sie wurde als Portfolio-Projekt entwickelt, um C#, WPF, SQLite und Entity Framew
 - Deutsches Datumsformat
 - Automatisch zentriertes Programmfenster
 - Grundlegende Eingabevalidierung
-- Aktuell angezeigte Bewerbungen als CSV exportieren
-- Dashboard mit Anzahl der Bewerbungen pro Status anzeigen
 
 ## Technologien
 
@@ -51,11 +55,29 @@ Beispielpfad unter Windows:
 
 Die Datenbankdatei wird nicht ins GitHub-Repository übernommen.
 
+## Projektstruktur
+
+    Bewerbungsmanager/
+    ├── Data/
+    │   └── ApplicationDbContext.cs
+    ├── Models/
+    │   └── JobApplication.cs
+    ├── Services/
+    │   └── JobApplicationService.cs
+    ├── docs/
+    │   └── screenshots/
+    │       └── main-window.png
+    ├── MainWindow.xaml
+    ├── MainWindow.xaml.cs
+    └── README.md
+
 ## Geplante Funktionen
 
 - Verbesserte Detailansicht für Notizen
 - Weitere Sortier- und Filteroptionen
+- Weitere Code-Aufräumarbeiten nach MVVM-Prinzipien
+- Optionaler Excel-Export
 
 ## Projektstatus
 
-Version 0.4 - Bewerbungsmanagement mit lokaler SQLite-Datenbank, Bearbeiten/Löschen-Funktion, Suche, Statusfilter, CSV-Export, Dashboard, farblicher Statusanzeige und Tastenkürzeln.
+Version 0.5 - Bewerbungsmanagement mit lokaler SQLite-Datenbank, Bearbeiten/Löschen-Funktion, Suche, Statusfilter, CSV-Export, Dashboard, farblicher Statusanzeige und Tastenkürzeln.
