@@ -23,6 +23,8 @@ namespace JobApplicationTracker.Models
 
         public string AttachmentPath { get; set; } = string.Empty;
 
+        public string RejectionAttachmentPath { get; set; } = string.Empty;
+
         [NotMapped]
         public string AttachmentDisplay
         {
@@ -33,5 +35,17 @@ namespace JobApplicationTracker.Models
                     : Path.GetFileName(AttachmentPath);
             }
         }
+
+        [NotMapped]
+        public string RejectionAttachmentDisplay
+        {
+            get
+            {
+                return string.IsNullOrWhiteSpace(RejectionAttachmentPath)
+                    ? "-"
+                    : Path.GetFileName(RejectionAttachmentPath);
+            }
+        }
+
     }
 }

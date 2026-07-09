@@ -73,6 +73,7 @@ namespace JobApplicationTracker.Services
             applicationFromDatabase.Status = updatedApplication.Status;
             applicationFromDatabase.Notes = updatedApplication.Notes;
             applicationFromDatabase.AttachmentPath = updatedApplication.AttachmentPath;
+            applicationFromDatabase.RejectionAttachmentPath = updatedApplication.RejectionAttachmentPath;
 
             db.SaveChanges();
         }
@@ -106,6 +107,16 @@ namespace JobApplicationTracker.Services
             catch
             {
                 // Die Spalte existiert bereits.
+            }
+
+            try
+            {
+                db.Database.ExecuteSqlRaw(
+                    "ALTER TABLE JobApplications ADD COLUMN RejectionAttachmentPath TEXT NOT NULL DEFAULT ''");
+            }
+            catch
+            {
+                // Die Spalte existiert bereits. Das ist okay.
             }
         }
     }

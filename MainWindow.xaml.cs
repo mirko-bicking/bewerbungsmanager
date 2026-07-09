@@ -24,6 +24,9 @@ private JobApplication? _selectedApplication;
 private string _currentAttachmentPath = string.Empty;
 private string _selectedAttachmentSourcePath = string.Empty;
 
+private string _currentRejectionAttachmentPath = string.Empty;
+private string _selectedRejectionAttachmentSourcePath = string.Empty;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -130,6 +133,7 @@ private string _selectedAttachmentSourcePath = string.Empty;
             }
 
             string attachmentPath = GetAttachmentPathForSaving(companyName, positionTitle);
+            string rejectionAttachmentPath = GetRejectionAttachmentPathForSaving(companyName, positionTitle);
 
             var application = new JobApplication
             {
@@ -139,8 +143,9 @@ private string _selectedAttachmentSourcePath = string.Empty;
                 ContactEmail = ContactEmailTextBox.Text.Trim(),
                 ApplicationDate = ApplicationDatePicker.SelectedDate ?? DateTime.Today,
                 Status = selectedStatus,
+                Notes = NotesTextBox.Text.Trim(),
                 AttachmentPath = attachmentPath,
-                Notes = NotesTextBox.Text.Trim()
+                RejectionAttachmentPath = rejectionAttachmentPath
             };
 
             _jobApplicationService.AddApplication(application);
@@ -182,6 +187,7 @@ private string _selectedAttachmentSourcePath = string.Empty;
             {
                 _jobApplicationService.DeleteApplication(selectedApplication.Id);
                 _attachmentService.DeleteAttachmentIfExists(selectedApplication.AttachmentPath);
+                _attachmentService.DeleteAttachmentIfExists(selectedApplication.RejectionAttachmentPath);
 
                 ApplyFilters();
                 ResetFormSelection();
@@ -233,6 +239,7 @@ private string _selectedAttachmentSourcePath = string.Empty;
             }
 
             string attachmentPath = GetAttachmentPathForSaving(companyName, positionTitle);
+            string rejectionAttachmentPath = GetRejectionAttachmentPathForSaving(companyName, positionTitle);
 
             var updatedApplication = new JobApplication
             {
@@ -244,7 +251,8 @@ private string _selectedAttachmentSourcePath = string.Empty;
                 ApplicationDate = ApplicationDatePicker.SelectedDate ?? DateTime.Today,
                 Status = selectedStatus,
                 Notes = NotesTextBox.Text.Trim(),
-                AttachmentPath = attachmentPath
+                AttachmentPath = attachmentPath,
+                RejectionAttachmentPath = rejectionAttachmentPath
             };
 
             try
@@ -280,8 +288,16 @@ private string _selectedAttachmentSourcePath = string.Empty;
             ApplicationDatePicker.SelectedDate = selectedApplication.ApplicationDate;
             NotesTextBox.Text = selectedApplication.Notes;
             _currentAttachmentPath = selectedApplication.AttachmentPath;
+            _currentRejectionAttachmentPath = selectedApplication.RejectionAttachmentPath;
             _selectedAttachmentSourcePath = string.Empty;
+            _selectedRejectionAttachmentSourcePath = string.Empty;
             AttachmentFileTextBlock.Text = _attachmentService.GetAttachmentFileName(_currentAttachmentPath);
+            RejectionAttachmentFileTextBlock.Text = _attachmentService.GetAttachmentFileName(_currentRejectionAttachmentPath);
+
+            if (string.IsNullOrWhiteSpace(_currentRejectionAttachmentPath))
+            {
+                RejectionAttachmentFileTextBlock.Text = "Keine Absage-PDF ausgewählt";
+            }
 
             foreach (ComboBoxItem item in StatusComboBox.Items)
             {
@@ -372,7 +388,7 @@ private string _selectedAttachmentSourcePath = string.Empty;
                     $"{EscapeCsvValue(application.ContactEmail)};" +
                     $"{application.ApplicationDate:dd.MM.yyyy};" +
                     $"{EscapeCsvValue(application.Status)};" +
-                    $"{EscapeCsvValue(application.Notes)}");
+                    $"{EscapeCsvValue(application.Notes)};");
             }
 
             File.WriteAllText(saveFileDialog.FileName, csvBuilder.ToString(), Encoding.UTF8);
@@ -402,6 +418,52 @@ private string _selectedAttachmentSourcePath = string.Empty;
             }
 
             return escapedValue;
+        }
+
+        private void SelectRejectionPdfButton_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Title = "Absage-PDF auswählen",
+                Filter = "PDF-Dateien (*.pdf)|*.pdf"
+            };
+
+            bool? result = openFileDialog.ShowDialog();
+
+            if (result != true)
+            {
+                return;
+            }
+
+            _selectedRejectionAttachmentSourcePath = openFileDialog.FileName;
+            RejectionAttachmentFileTextBlock.Text = Path.GetFileName(_selectedRejectionAttachmentSourcePath);
+        }
+
+        private void OpenRejectionPdfButton_Click(object sender, RoutedEventArgs e)
+        {
+            string attachmentPath = !string.IsNullOrWhiteSpace(_selectedRejectionAttachmentSourcePath)
+                ? _selectedRejectionAttachmentSourcePath
+                : _currentRejectionAttachmentPath;
+
+            try
+            {
+                _attachmentService.OpenAttachment(attachmentPath);
+            }
+            catch
+            {
+                MessageBox.Show(
+                    "Es wurde keine gültige Absage-PDF gefunden.",
+                    "PDF nicht gefunden",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+        }
+
+        private void RemoveRejectionPdfButton_Click(object sender, RoutedEventArgs e)
+        {
+            _currentRejectionAttachmentPath = string.Empty;
+            _selectedRejectionAttachmentSourcePath = string.Empty;
+            RejectionAttachmentFileTextBlock.Text = "Keine Absage-PDF ausgewählt";
         }
 
         private void UpdateDashboard()
@@ -473,6 +535,19 @@ private string _selectedAttachmentSourcePath = string.Empty;
                 positionTitle);
         }
 
+        private string GetRejectionAttachmentPathForSaving(string companyName, string positionTitle)
+        {
+            if (string.IsNullOrWhiteSpace(_selectedRejectionAttachmentSourcePath))
+            {
+                return _currentRejectionAttachmentPath;
+            }
+
+            return _attachmentService.CopyPdfToAttachmentFolder(
+                _selectedRejectionAttachmentSourcePath,
+                companyName,
+                $"{positionTitle}_Absage");
+        }
+
         private void RemovePdfButton_Click(object sender, RoutedEventArgs e)
         {
             _currentAttachmentPath = string.Empty;
@@ -500,6 +575,10 @@ private string _selectedAttachmentSourcePath = string.Empty;
             _currentAttachmentPath = string.Empty;
             _selectedAttachmentSourcePath = string.Empty;
             AttachmentFileTextBlock.Text = "Kein Anhang ausgewählt";
+
+            _currentRejectionAttachmentPath = string.Empty;
+            _selectedRejectionAttachmentSourcePath = string.Empty;
+            RejectionAttachmentFileTextBlock.Text = "Keine Absage-PDF ausgewählt";
         }
     }
 }

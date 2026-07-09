@@ -30,6 +30,7 @@ Sie wurde als Portfolio-Projekt entwickelt, um C#, WPF, SQLite und Entity Framew
 - Automatisch zentriertes Programmfenster
 - Grundlegende Eingabevalidierung
 - PDF-Stellenausschreibungen an Bewerbungen anhängen
+- Absage-PDFs zusätzlich an Bewerbungen anhängen
 - PDF-Anhänge im lokalen AppData-Ordner speichern
 - PDF-Anhänge direkt aus der Anwendung öffnen
 
@@ -84,4 +85,4 @@ Die Datenbankdatei wird nicht ins GitHub-Repository übernommen.
 
 ## Projektstatus
 
-Version 0.6 - Bewerbungsmanagement mit lokaler SQLite-Datenbank, Bearbeiten/Löschen-Funktion, Suche, Statusfilter, CSV-Export, Dashboard, PDF-Anhängen, farblicher Statusanzeige und Tastenkürzeln.
+Version 0.6 - Bewerbungsmanagement mit lokaler SQLite-Datenbank, Bearbeiten/Löschen-Funktion, Suche, Statusfilter, CSV-Export, Dashboard, PDF-Anhängen für Stellenausschreibungen und Absagen, farblicher Statusanzeige und Tastenkürzeln.

@@ -102,7 +102,7 @@
                     Margin="0,0,5,0"
                     Click="SelectPdfButton_Click"/>
 
-                    <Button Content="PDF öffnen"
+                    <Button Content="Öffnen"
                     Width="80"
                     Height="30"
                     Margin="0,0,5,0"
@@ -116,6 +116,31 @@
 
                 <TextBlock x:Name="AttachmentFileTextBlock"
                    Text="Kein Anhang ausgewählt"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,20"/>
+
+                <TextBlock Text="Absage-PDF"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                    <Button Content="PDF auswählen"
+                    Width="110"
+                    Height="30"
+                    Margin="0,0,5,0"
+                    Click="SelectRejectionPdfButton_Click"/>
+
+                    <Button Content="Öffnen"
+                    Width="80"
+                    Height="30"
+                    Margin="0,0,5,0"
+                    Click="OpenRejectionPdfButton_Click"/>
+
+                    <Button Content="Entfernen"
+                    Width="80"
+                    Height="30"
+                    Click="RemoveRejectionPdfButton_Click"/>
+                </StackPanel>
+
+                <TextBlock x:Name="RejectionAttachmentFileTextBlock"
+                   Text="Keine Absage-PDF ausgewählt"
                    TextWrapping="Wrap"
                    Margin="0,0,0,20"/>
 
@@ -302,7 +327,11 @@
                                         Binding="{Binding AttachmentDisplay}"
                                         Width="SizeToCells"
                                         MinWidth="120"/>
-                    
+
+                    <DataGridTextColumn Header="Absage-PDF"
+                                        Binding="{Binding RejectionAttachmentDisplay}"
+                                        Width="SizeToCells"
+                                        MinWidth="120"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>
